@@ -48,10 +48,13 @@ a                     = 1.52;    % distance between bolts (in)  UNVERIFIED for R
 y                     = 0.4185;  % spherical to middle of bracket base (in)  UNVERIFIED for Rev15
 SF                    = 2;       % safety factor applied to loads
 inserts_per_bracket   = 2;       % spools (= bolts) per bracket
-% Puck layout (user, Nov 2026: two bolts CAN share a puck):
-%   'shared'   = one ROUND puck holds both spools (at +/- a/2); loads = bracket resultants
+% Puck layout (user, Nov 2026: two bolts CAN share a puck, as two overlapping circles):
+%   'overlap'  = two overlapping circles, one lobe per spool, centres a apart (figure-8 outline).
+%                ECSS is for ONE circular insert, so the union is sized with an equal-PERIMETER
+%                equivalent circle (an approximation of ours, not ECSS, ignoring the two cusps).
+%   'shared'   = one big ROUND puck holds both spools (at +/- a/2); loads = bracket resultants
 %   'separate' = one puck per spool; neighbouring pucks must fit at the bolt spacing a
-puck_layout           = 'shared';
+puck_layout           = 'overlap';
 
 % Split of Q, M and friction between the spools of a bracket:
 %   'whole_bracket' = "method 1" of the MR26 sheet: per-insert P, but WHOLE-bracket Q, M and
@@ -146,7 +149,7 @@ p.load_mode = load_mode;  p.direct_P = direct_P;  p.direct_Q = direct_Q;  p.dire
 p.link_force_N = link_force_N;  p.angle_deg = angle_from_normal_deg;
 p.bracket_type = bracket_type;  p.a = a;  p.y = y;  p.SF = SF;
 p.inserts_per_bracket = inserts_per_bracket;
-if strcmpi(puck_layout, 'shared'), p.inserts_per_puck = inserts_per_bracket; else, p.inserts_per_puck = 1; end
+if strcmpi(puck_layout, 'separate'), p.inserts_per_puck = 1; else, p.inserts_per_puck = inserts_per_bracket; end
 p.puck_layout = puck_layout;
 p.load_convention = load_convention;
 p.use_friction = use_friction;  p.bolt_preload = bolt_preload;  p.mu = mu;
@@ -185,7 +188,10 @@ else
             direct_P, direct_Q, direct_M);
 end
 fprintf('Per spool: P = %.0f lb   Q = %.0f lb   M = %.0f lb-in\n', L.P, L.Q, L.M);
-if p.inserts_per_puck > 1
+if r.overlap
+    fprintf('Puck layout: OVERLAP, two overlapping circles (one lobe per spool, centres %.2f in apart), sized by an equal-perimeter equivalent circle.\n', a);
+    fprintf('  Loads on the puck (bracket resultants): P = %.0f lb   Q = %.0f lb   M = %.0f lb-in\n', r.Pp, r.Qp, r.Mp);
+elseif p.inserts_per_puck > 1
     fprintf('Puck layout: SHARED round puck holding %d spools at +/- %.2f in from its centre.\n', p.inserts_per_puck, a/2);
     fprintf('  Loads on the puck (bracket resultants): P = %.0f lb   Q = %.0f lb   M = %.0f lb-in\n', r.Pp, r.Qp, r.Mp);
 else
@@ -199,26 +205,42 @@ fprintf('  UNVERIFIED: core data from the Hexcel table in CLAUDE.md (not the dat
 fprintf('\n=============================================================\n');
 fprintf('=== RESULT: RESIN PUCK RADIUS AND REQUIRED SPLICE BOND ===\n');
 fprintf('=============================================================\n');
-fprintf('Required radius by failure mode (hole radius in the core; ECSS variant: %s):\n', ecss_variant);
+if r.overlap
+    fprintf('Required EQUIVALENT-circle radius by failure mode (hole in the core; ECSS variant: %s):\n', ecss_variant);
+else
+    fprintf('Required radius by failure mode (hole radius in the core; ECSS variant: %s):\n', ecss_variant);
+end
 fprintf('  %-46s %6.3f in\n', 'ECSS core shear in panel core', r.R_ecss);
 fprintf('  %-46s %6.3f in\n', 'Face-sheet punch-out (placeholder strength)', r.R_punch);
-fprintf('  %-46s %6.3f in  (puck radius floor%s)\n', 'Geometry: spool flange + resin wall', r.R_geom, ...
+fprintf('  %-46s %6.3f in  (puck %sradius floor%s)\n', 'Geometry: spool flange + resin wall', r.R_geom, ternary_str(r.overlap, 'lobe ', ''), ...
         ternary_str(r.offset > 0, sprintf(', incl. %.2f in spool offset', r.offset), ''));
 fprintf('  Governs: %s\n', r.gov);
 fprintf('  For comparison, the %s ECSS convention gives %.3f in\n', r.other_variant, r.ecss_other.b_eff_req);
-fprintf('\nRESIN PUCK RADIUS TO MOLD: %.3f in (dia %.3f in)%s   [needed %.3f in]\n', r.R_p_std, 2*r.R_p_std, ...
-        ternary_str(r.beyond_std, '  (beyond the standard list, rounded up)', ''), r.R_p_req);
+if r.overlap
+    fprintf('\nRESIN PUCK, TWO OVERLAPPING CIRCLES: LOBE RADIUS TO MOLD %.3f in (dia %.3f in)%s   [needed %.3f in]\n', r.R_p_std, 2*r.R_p_std, ...
+            ternary_str(r.beyond_std, '  (beyond the standard list, rounded up)', ''), r.R_p_req);
+    fprintf('  Lobe centres %.2f in apart; overall hole outline %.2f in long x %.2f in wide; %s\n', a, r.length_h, r.width_h, ...
+            ternary_str(r.lobes_overlap, 'lobes overlap.', 'lobes do NOT overlap (separate pucks).'));
+    fprintf('  Equal-perimeter equivalent radius of the hole outline: %.3f in (perimeter %.2f in, area %.2f in^2)\n', r.Req_h, r.per_h, r.area_h);
+    fprintf('  CAVEAT: ECSS covers one circular insert; the outline has two re-entrant cusps whose stress concentration is NOT captured.\n');
+else
+    fprintf('\nRESIN PUCK RADIUS TO MOLD: %.3f in (dia %.3f in)%s   [needed %.3f in]\n', r.R_p_std, 2*r.R_p_std, ...
+            ternary_str(r.beyond_std, '  (beyond the standard list, rounded up)', ''), r.R_p_req);
+end
 fprintf('  Hole radius in the core: %.3f in (puck + %.3f in splice gap, gap is a PLACEHOLDER)\n', r.R_h_std, splice_gap_in);
 fprintf('  Resin / splice wall height h = %.3f in (core %.3f in minus 2 x %.3f in inset; inset is a PLACEHOLDER, 0 = resin as tall as the core)\n', r.h, c, inset_each_face_in);
-fprintf('  Spool flanges flush with the skins (user). One round puck per bracket holds %d spool(s).\n', p.inserts_per_puck);
+fprintf('  Spool flanges flush with the skins (user). One puck per bracket holds %d spool(s).\n', p.inserts_per_puck);
 
 fprintf('\nREQUIRED SPLICE BOND STRENGTH (reported, not sized), on the full wall area of the puck:\n');
 fprintf('  Axial shear, average, for push-out coupons : %6.0f psi on the puck wall (%.0f psi on the core wall)\n', r.tau_avg_puck, r.tau_avg_core);
-fprintf('                                               = P / (2*pi*R*h), all load through the wall, no skin credit\n');
+fprintf('                                               = P / (perimeter*h), all load through the wall, no skin credit\n');
 fprintf('  Axial shear, PEAK with moment M            : %6.0f psi on the puck wall (%.0f psi on the core wall)\n', r.tau_pk_puck, r.tau_pk_core);
-fprintf('                                               = P/(2*pi*R*h) + M/(pi*R^2*h)  [rigid-puck estimate, ours, not ECSS]\n');
+fprintf('                                               = P/(perimeter*h) + M/(pi*Req^2*h)  [rigid-puck estimate, ours, not ECSS]\n');
 fprintf('  Wall normal stress from in-plane Q         : %6.0f psi on the puck wall (%.0f psi on the core wall)\n', r.sig_q_puck, r.sig_q_core);
-fprintf('                                               = Q/(pi*R*h), film in tension on the trailing side [ours, not ECSS]\n');
+fprintf('                                               = Q/(pi*Req*h), film in tension on the trailing side [ours, not ECSS]\n');
+if r.overlap
+    fprintf('                                               (Req = perimeter/2pi; the cusps will see peaks above these averages)\n');
+end
 fprintf('  Allowable bracket (AF 3074 data is on SOLID Al tubes, not honeycomb; foil solidity of %s = %.1f%%):\n', cp.name, 100*r.solidity);
 for k = 1:numel(r.allow.vals)
     fprintf('    %-42s %6.0f psi : MS average %6.2f, peak %6.2f\n', r.allow.names{k}, r.allow.vals(k), r.allow.ms_avg(k), r.allow.ms_peak(k));
@@ -253,24 +275,25 @@ fprintf('\nMass per puck: %.0f g gross (spool(s) %.1f g + resin %.0f g [%.3f in^
 fprintf('  Per bracket (%g puck(s)): %.0f g net\n', r.pucks_per_bracket, 1000*r.mass.net_per_bracket);
 
 %% 7b. LAYOUT COMPARISON
-fprintf('\n=== LAYOUT COMPARISON: ONE SHARED ROUND PUCK vs ONE PUCK PER SPOOL ===\n');
-for ipp = unique([1 inserts_per_bracket])
-    pp = p;  pp.inserts_per_puck = ipp;
+fprintf('\n=== LAYOUT COMPARISON: TWO OVERLAPPING CIRCLES vs ONE BIG ROUND PUCK vs ONE PUCK PER SPOOL ===\n');
+lay_names = {'overlap', 'shared', 'separate'};
+for k = 1:numel(lay_names)
+    pp = p;  pp.puck_layout = lay_names{k};
+    if strcmp(lay_names{k}, 'separate'), pp.inserts_per_puck = 1; else, pp.inserts_per_puck = inserts_per_bracket; end
     rr = resin_puck_size(pp);
-    if ipp == 1, nm = 'separate'; else, nm = 'shared'; end
     if rr.ok
         if ~isnan(rr.ms_spacing)
             sp_txt = sprintf('spacing %s (a = %.2f in vs %.2f in needed)', ternary_str(rr.ms_spacing < 0, 'FAILS', 'ok'), a, rr.spacing_min);
         else
             sp_txt = 'one puck, no spacing check';
         end
-        fprintf('  %-8s: puck R %.3f in std (needed %.3f), %g puck(s) per bracket, %.0f g net per bracket, peak bond %.0f psi, %s\n', ...
-                nm, rr.R_p_std, rr.R_p_req, rr.pucks_per_bracket, 1000*rr.mass.net_per_bracket, rr.tau_pk_puck, sp_txt);
+        fprintf('  %-8s: radius %.3f in std (needed %.3f), outline %.2f x %.2f in, %g puck(s) per bracket, %.0f g net per bracket, peak bond %.0f psi, %s\n', ...
+                lay_names{k}, rr.R_p_std, rr.R_p_req, rr.length_h, rr.width_h, rr.pucks_per_bracket, 1000*rr.mass.net_per_bracket, rr.tau_pk_puck, sp_txt);
     else
-        fprintf('  %-8s: %s\n', nm, rr.msg);
+        fprintf('  %-8s: %s\n', lay_names{k}, rr.msg);
     end
 end
-fprintf('  A shared ROUND puck is conservative for ECSS (one big circle through both spools); a lozenge/stadium puck would be lighter but is not modeled.\n');
+fprintf('  The overlap numbers use an equal-perimeter equivalent circle (ours, not ECSS) and ignore the cusps; treat them as a first estimate, not a bound.\n');
 
 fprintf('\n=== RESIN AND SPLICE NOTES ===\n');
 fprintf('  Resin %s (%s): %.2f g/cc, neat compressive yield %.0f psi (%s)\n', pot.name, pot.source, pot.rho_gcc, pot.comp_yield_psi, pot.comp_note);
@@ -340,7 +363,7 @@ if run_batch && exist(hardpoint_csv, 'file')
                 otherwise,           pp.(flds{j}) = hp(i).(flds{j});
             end
         end
-        if strcmpi(puck_layout, 'shared'), pp.inserts_per_puck = pp.inserts_per_bracket; else, pp.inserts_per_puck = 1; end
+        if strcmpi(puck_layout, 'separate') || pp.inserts_per_bracket == 1, pp.inserts_per_puck = 1; else, pp.inserts_per_puck = pp.inserts_per_bracket; end
         rr = resin_puck_size(pp);
         flag = '';
         if ~hp(i).geom_verified, flag = [flag ' GEOM-PLACEHOLDER']; end %#ok<AGROW>
