@@ -21,7 +21,8 @@ a                = 1.52;        % bolt spacing, in                              
 y                = 0.4185;      % moment arm of the in-plane load above the panel, in <-- verify for Rev15
 SF               = 2;           % safety factor on load
 bolts_per_bracket = 2;
-bolts_in_puck    = 2;           % 2 = both bolts share one puck (two overlapping circles), 1 = one bolt per puck
+bolts_in_puck    = 2;           % 2 = both bolts share one puck, 1 = one bolt per puck
+puck_shape       = 'figure8';   % for 2 bolts: 'figure8' (two overlapping circles, has cusps) or 'stadium' (slot, no cusps)
 use_friction     = true;        % bolt clamp friction carries part of the in-plane load
 bolt_preload_lb  = 2125.8;      % per bolt                                        <-- PLACEHOLDER (torque spec gives ~1156 lb)
 mu               = 0.2;         % friction coefficient                            <-- PLACEHOLDER (MR26 sheet used 0.175)
@@ -105,7 +106,12 @@ R_geom = flange_OD/2 + resin_wall_min;
 th_f   = @(R) acos(min(a./(2*R), 1));                                        % half-angle lost inside the overlap
 per_f  = @(R) 4*R.*(pi - th_f(R));                                           % perimeter of the union
 area_f = @(R) 2*pi*R.^2 - (2*R.^2.*th_f(R) - (a/2)*sqrt(max(4*R.^2 - a^2, 0)));  % area of the union
-if bolts_in_puck == 2
+if bolts_in_puck == 2 && strcmpi(puck_shape, 'stadium')
+    % Stadium (slot): end radius R at each bolt, straight sides a long. No cusps.
+    per_f  = @(R) 2*a + 2*pi*R;
+    area_f = @(R) pi*R.^2 + 2*R*a;
+    lobe_for = @(Req) max(Req - a/pi, 0);        % same-PERIMETER rule as the figure-8 (ours, NOT ECSS)
+elseif bolts_in_puck == 2
     % Lobe radius whose union outline has the same PERIMETER as a round puck of radius R_eq.
     % This is an approximation of ours, NOT ECSS: it ignores the stress concentration at the two cusps.
     Rg = linspace(0.01, 8, 80000);
@@ -154,7 +160,11 @@ fprintf('  Design loads on the puck:  P = %.0f lb (pull-out),  Q = %.0f lb (in-p
 
 fprintf('--- RESIN PUCK RADIUS ---\n');
 if bolts_in_puck == 2
-    fprintf('  Radius of each lobe (two overlapping circles, centres %.2f in apart): %.3f in\n', a, R_puck);
+    if strcmpi(puck_shape, 'stadium')
+        fprintf('  Stadium (slot) puck: end radius at each bolt %.3f in, centres %.2f in apart, straight sides\n', R_puck, a);
+    else
+        fprintf('  Radius of each lobe (two overlapping circles, centres %.2f in apart): %.3f in\n', a, R_puck);
+    end
     fprintf('  Outline: %.2f in long x %.2f in wide, area %.2f in^2\n', a + 2*R_puck, 2*R_puck, area_f(R_puck));
 else
     fprintf('  Puck radius (one round puck): %.3f in  (diameter %.3f in)\n', R_puck, 2*R_puck);
@@ -168,7 +178,7 @@ for k = 1:3
     fprintf('  %-40s %12.3f %+10.2f%s\n', modes{k}, R_req(k), MS_all(k), flag);
 end
 fprintf('  (Round-puck equivalents: ECSS %.3f in, punch-out %.3f in. ', Req_ecss, Req_punch);
-if bolts_in_puck == 2, fprintf('Lobe radii above come from the equal-perimeter conversion.)\n\n'); else, fprintf(')\n\n'); end
+if bolts_in_puck == 2, fprintf('Radii above come from the equal-perimeter conversion.)\n\n'); else, fprintf(')\n\n'); end
 
 fprintf('--- SPLICE BOND STRENGTH REQUIRED (on the puck wall, height %.2f in) ---\n', h);
 fprintf('  Average axial shear   : %6.0f psi   (P / (perimeter x height))\n', tau_avg);
@@ -187,6 +197,12 @@ if Q == 0 && strcmpi(load_mode,'bracket')
 end
 fprintf('  * PLACEHOLDERS: skin layup (n_plies, t_ply, Ef, vf), sigma_fy, tau_f_punch, bolt preload and mu,\n');
 fprintf('    resin_wall_min, inset_each_face, and the Rev15 angle / a / y.\n');
-fprintf('  * Overlapping-circle sizing is an equal-perimeter approximation (ours, not ECSS); cusp stresses ignored.\n');
+if bolts_in_puck == 2
+    if strcmpi(puck_shape, 'stadium')
+        fprintf('  * Two-bolt puck sizing is an equal-perimeter approximation (ours, not ECSS).\n');
+    else
+        fprintf('  * Two-bolt puck sizing is an equal-perimeter approximation (ours, not ECSS); cusp stresses ignored.\n');
+    end
+end
 fprintf('  * Resin LAM-151-HT: onset Tg 328 F is below the 350 F co-cure; no 350 F data. Splice film data is typical/preliminary.\n');
 fprintf('  * Not validated: only axial pull-out has MR25 test calibration; nothing in-plane.\n\n');
