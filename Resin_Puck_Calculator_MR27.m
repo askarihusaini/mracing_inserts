@@ -48,6 +48,9 @@ Gc               = G_W;         % decided: Gc = G_W (the old G_W/3 is dropped)
 
 % --- Spool and resin -----------------------------------------------------
 flange_OD        = 0.50;        % NAS03 spool flange OD, in
+neck_OD          = 0.291;       % NAS03 spool neck OD, in
+bolt_bore        = 0.191;       % spool bore, in
+neck_yield_psi   = 35000;       % spool neck yield: 6061-T6 minimum, assumed  <-- PLACEHOLDER (confirm spool alloy/temper)
 resin_wall_min   = 0.125;       % min resin wall outside the flange, in           <-- PLACEHOLDER
 inset_each_face  = 0.0;         % resin inset below each skin, in (resin is slightly inset to fit under skins) <-- PLACEHOLDER
 
@@ -100,6 +103,16 @@ Req_punch = P/(2*pi*f*tau_f_punch);
 
 % --- 3. Geometry: the puck must hold the spool flange plus a minimum resin wall (per lobe) ---
 R_geom = flange_OD/2 + resin_wall_min;
+
+% --- 4. Spool neck compression (a spool check: it does NOT change the puck radius) ---
+% Worst case is the push-in direction: bolt preload clamps the neck and the pushed-in link load adds to it.
+% The neck is checked ALONE, so any compression the resin shares is ignored (conservative, see printout).
+A_neck    = pi/4*(neck_OD^2 - bolt_bore^2);          % in^2
+F_neck    = bolt_preload_lb + P/bolts_in_puck;       % lb per spool: preload + equal share of the push-in load
+sig_neck  = F_neck/A_neck;                           % psi
+MS_neck   = neck_yield_psi/sig_neck - 1;
+A_neck_req  = F_neck/neck_yield_psi;                 % neck area needed for MS = 0, in^2
+OD_neck_req = sqrt(4*A_neck_req/pi + bolt_bore^2);   % neck OD needed for MS = 0 at this bore, in
 
 %% ========================= TWO OVERLAPPING CIRCLES =========================
 % Outline of two circles of radius R with centres a apart. Perimeter and area of the union:
@@ -180,6 +193,15 @@ end
 fprintf('  (Round-puck equivalents: ECSS %.3f in, punch-out %.3f in. ', Req_ecss, Req_punch);
 if bolts_in_puck == 2, fprintf('Radii above come from the equal-perimeter conversion.)\n\n'); else, fprintf(')\n\n'); end
 
+fprintf('--- SPOOL NECK COMPRESSION (does not change the puck radius) ---\n');
+fprintf('  Load per spool %.0f lb (preload %.0f + push-in %.0f) on neck area %.4f in^2 -> %.0f psi vs yield %.0f psi\n', ...
+    F_neck, bolt_preload_lb, P/bolts_in_puck, A_neck, sig_neck, neck_yield_psi);
+if MS_neck >= 0, verdict = 'OK'; else, verdict = 'FAILS (neck alone)'; end
+fprintf('  Margin %+.2f  %s.  Neck OD for MS = 0 at a %.3f in bore: %.3f in (now %.3f in; flange OD %.2f in)\n', ...
+    MS_neck, verdict, bolt_bore, OD_neck_req, neck_OD, flange_OD);
+fprintf('  Checked on the neck alone; the resin around it may share the compression, which this ignores.\n');
+fprintf('  Preload is a PLACEHOLDER; the ~1156 lb torque-spec value lowers this check but does not fix it.\n\n');
+
 fprintf('--- SPLICE BOND STRENGTH REQUIRED (on the puck wall, height %.2f in) ---\n', h);
 fprintf('  Average axial shear   : %6.0f psi   (P / (perimeter x height))\n', tau_avg);
 fprintf('  Peak axial shear      : %6.0f psi   (adds the moment: M / (pi Req^2 h))\n', tau_pk);
@@ -196,7 +218,7 @@ if Q == 0 && strcmpi(load_mode,'bracket')
     fprintf('  * Friction cancels all of Q, so skin in-plane strength (sigma_fy) did not matter. Friction is a PLACEHOLDER.\n');
 end
 fprintf('  * PLACEHOLDERS: skin layup (n_plies, t_ply, Ef, vf), sigma_fy, tau_f_punch, bolt preload and mu,\n');
-fprintf('    resin_wall_min, inset_each_face, and the Rev15 angle / a / y.\n');
+fprintf('    resin_wall_min, inset_each_face, neck_yield_psi, and the Rev15 angle / a / y.\n');
 if bolts_in_puck == 2
     if strcmpi(puck_shape, 'stadium')
         fprintf('  * Two-bolt puck sizing is an equal-perimeter approximation (ours, not ECSS).\n');
