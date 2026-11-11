@@ -10,8 +10,9 @@
 % CHANGES FROM THE G7 PLUG CALCULATOR
 %   * Plug material (G7/G10/G11) -> resin puck material (LAM-151-HT) with an Al spool inside.
 %   * Gc = G_W (the old G_W/3 is dropped). Link force is Rev15 (8140 N).
-%   * Both bolts of the bracket can share ONE puck, so the puck carries the bracket loads. For two
-%     bolts the puck is a figure-8 (two overlapping circles) or a stadium (slot). ECSS only covers one
+%   * Both bolts of the bracket can share ONE puck, so the puck carries the bracket loads, or each bolt
+%     can have its own round puck ('separate'). A shared puck is a figure-8 (two overlapping circles)
+%     or a stadium (slot) selected with puck_layout. ECSS only covers one
 %     round insert, so the two-bolt outline is sized with an equal-PERIMETER equivalent round puck.
 %     That is our approximation, not ECSS.
 %   * Plug-to-core bond -> splice bond (same idea: reported as the required strength).
@@ -46,8 +47,12 @@ bolt_preload = 2125.8;           % lb per bolt, 75% of proof load (old calc valu
 mu           = 0.2;              % Al bracket on carbon (old calc value; sheet uses 0.175)
 n_bolts      = 2;                % bolts per bracket
 
-puck_bolts = 2;                  % bolts that share one puck: 2 = both bolts of the bracket, 1 = one puck per bolt
-puck_shape = 'figure8';          % shape of a 2-bolt puck: 'figure8' (two overlapping circles) or 'stadium' (slot)
+% Puck layout for a 2-bolt bracket:
+%   'figure8'  = both bolts in ONE puck made of two overlapping circles
+%   'stadium'  = both bolts in ONE puck shaped as a slot (no cusps)
+%   'separate' = one round puck per bolt (the pucks must fit at the bolt spacing a)
+puck_layout = 'figure8';
+puck_bolts  = 2 - strcmpi(puck_layout, 'separate');   % bolts per puck (2, or 1 for separate pucks)
 
 %% 2. SANDWICH PANEL
 % This is where ply thickness and core thickness go. old calc hard-coded these
@@ -100,6 +105,7 @@ inset_each_face = 0.0;           % resin inset below each skin (in), so the bond
 
 %% 5. HARDWARE AND SIZING RULES
 resin_wall_min = 0.125;          % min resin wall outside the spool flange (in)  PLACEHOLDER
+min_ligament = 0.25;             % min core left between two separate pucks (in)  PLACEHOLDER
 b_min    = 0.25;                 % floor on radius (old calc floored at 0.25")
 b_step   = 0;                    % round puck radius up to this step (in); 0 = no rounding
 Pss_knockdown = 0.89;            % ECSS min-vs-typical knockdown (old calc value)
@@ -193,7 +199,7 @@ b_edge  = spool_flange_OD/2 + resin_wall_min;
 
 % Two-bolt outline: equal-PERIMETER conversion from the equivalent round radius to the lobe radius.
 % (our approximation, NOT ECSS; the figure-8 also ignores the stress concentration at its two cusps)
-if puck_bolts == 2 && strcmpi(puck_shape, 'stadium')
+if puck_bolts == 2 && strcmpi(puck_layout, 'stadium')
     % Stadium: end radius R at each bolt, straight sides a long. Perimeter 2a + 2*pi*R.
     per_f    = @(R) 2*a + 2*pi*R;
     area_f   = @(R) pi*R.^2 + 2*R*a;
@@ -271,7 +277,7 @@ for k = 1:numel(req_vals)
 end
 if puck_bolts == 2
     fprintf('  (radius of each lobe; equivalent round puck: ECSS %.3f in, punch-out %.3f in)\n', b_ecss, b_punch);
-    if strcmpi(puck_shape, 'stadium')
+    if strcmpi(puck_layout, 'stadium')
         fprintf('Puck to mold: stadium, end radius %.4f in, bolt centres %.2f in apart, %.2f x %.2f in, approx. mass %.1f g\n', ...
                 b_design, a, a + 2*b_design, 2*b_design, 1000*m_puck);
     else
@@ -279,7 +285,10 @@ if puck_bolts == 2
                 b_design, a, a + 2*b_design, 2*b_design, 1000*m_puck);
     end
 else
-    fprintf('Puck radius to mold: %.4f in (dia %.4f in), approx. mass %.1f g\n', b_design, 2*b_design, 1000*m_puck);
+    fprintf('Puck radius to mold: %.4f in (dia %.4f in), approx. mass %.1f g per puck\n', b_design, 2*b_design, 1000*m_puck);
+    if strcmpi(puck_layout, 'separate')
+        fprintf('Separate pucks: one per bolt, %d per bracket, approx. %.1f g per bracket\n', n_bolts, n_bolts*1000*m_puck);
+    end
 end
 
 fprintf('\n=== SPLICE BOND REQUIREMENT (target for push-out coupons) ===\n');
@@ -303,6 +312,13 @@ if MS_neck < 0
     fprintf('    Neck alone FAILS. Neck OD for MS = 0 at the %.3f in bore: %.3f in (now %.3f in, flange OD %.3f in).\n', ...
             spool_hole_dia, OD_neck_req, spool_neck_dia, spool_flange_OD);
     fprintf('    The resin around the neck may share the compression; this check ignores that.\n');
+end
+if strcmpi(puck_layout, 'separate') && strcmpi(load_mode, 'bracket')
+    spacing_min = 2*b_design + min_ligament;      % two round pucks plus the core ligament between them
+    MS_spacing  = a/spacing_min - 1;
+    if MS_spacing >= 0, verdict = 'fit'; else, verdict = 'DO NOT FIT'; end
+    fprintf('  Separate pucks at bolt spacing MS = %6.2f  (need %.2f in centre-to-centre, have %.2f in: pucks %s)\n', ...
+            MS_spacing, spacing_min, a, verdict);
 end
 T_cure_C = (cure_temp_F-32)*5/9;
 if mat.T_max_C < T_cure_C

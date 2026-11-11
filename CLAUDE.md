@@ -7,7 +7,7 @@ Read this whole file before editing the calculator.
 ## REPO LAYOUT (Nov 2026)
 - `Resin_Puck_Calculator_MR27.m`: THE calculator. One standalone script, no helper files. It follows the
   section layout and variable names of `g7_plug_calculator/G7_Insert_Calculator_MR27_20261008.m` (the
-  original). Inputs: resin puck material, `puck_bolts`, `puck_shape` ('figure8' or 'stadium'),
+  original). Inputs: resin puck material, `puck_layout` ('figure8', 'stadium' or 'separate'),
   `load_mode` ('bracket' or 'direct'). Outputs: puck radius, failure modes (ECSS, punch-out, spool flange
   + wall, floor) with the governing one, required splice bond, spool neck compression.
 - `g7_plug_calculator/`: the original G7 plug calculator (standalone), kept for reference.
