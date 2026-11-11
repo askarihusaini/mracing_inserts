@@ -31,6 +31,13 @@ y                     = 0.4185;  % spherical to middle of bracket base (in)
 
 SF = 2;                          % safety factor applied to loads
 
+% Load mode: 'bracket' uses the link force and bracket geometry above (suspension arms).
+% 'direct' skips the bracket and applies loads straight to the puck (non-suspension parts).
+load_mode    = 'bracket';        % 'bracket' or 'direct'
+direct_P_lb  = 1000;             % 'direct' mode: normal (pull-out) load on ONE puck, before SF
+direct_Q_lb  = 0;                % in-plane shear on the puck, before SF
+direct_M_lbin = 0;               % moment on the puck, before SF
+
 % Friction credit (same assumption as old calc). With these numbers friction
 % (850 lb per bracket) cancels all shear for every control arm at SF 2-2.5.
 % Set use_friction = false for a conservative shear check.
@@ -108,38 +115,50 @@ rho_al_gcc       = 2.70;         % Al 6061 (g/cc)
 spool_neck_yield = 35000;        % psi, 6061-T6 minimum yield, assumed  PLACEHOLDER (confirm spool alloy/temper)
 
 %% 6. DESIGN LOADS PER INSERT
-F   = link_force_N * 0.224809;               % N -> lb
-ang = angle_from_normal_deg * pi/180;
-Fn  = F*cos(ang);                            % normal to panel, whole bracket
-Fs  = F*sin(ang);                            % in-plane, whole bracket
+switch lower(load_mode)
+    case 'bracket'
+        F   = link_force_N * 0.224809;               % N -> lb
+        ang = angle_from_normal_deg * pi/180;
+        Fn  = F*cos(ang);                            % normal to panel, whole bracket
+        Fs  = F*sin(ang);                            % in-plane, whole bracket
 
-switch upper(bracket_type)
-    case 'B'   % both bolts share the normal load; moment carried at base
-        P_ins = Fn/2;
-        M_ins = Fs*y;
-    case 'A'   % moment resolved into a bolt-load couple (sheet FBD)
-        P_ins = Fn/2 + Fs*y/a;               % worst (outside) bolt
-        M_ins = 0;
+        switch upper(bracket_type)
+            case 'B'   % both bolts share the normal load; moment carried at base
+                P_ins = Fn/2;
+                M_ins = Fs*y;
+            case 'A'   % moment resolved into a bolt-load couple (sheet FBD)
+                P_ins = Fn/2 + Fs*y/a;               % worst (outside) bolt
+                M_ins = 0;
+            otherwise
+                error('bracket_type must be ''A'' or ''B''');
+        end
+
+        max_friction = n_bolts*bolt_preload*mu*use_friction;
+        P = SF*P_ins;                                % design normal load per insert (lb)
+        Q = max(SF*Fs - max_friction, 0);            % design shear (lb), old calc convention
+        M = SF*M_ins;                                % design moment (lb-in)
+
+        % Loads on the PUCK. If both bolts share it, the puck carries the bracket resultants (the bolt
+        % couple of a type A bracket is internal to the rigid puck). If each bolt has its own puck, each
+        % puck carries the per-insert loads above, as in the G7 calculator.
+        if puck_bolts == n_bolts
+            P_puck = SF*Fn;   M_puck = SF*Fs*y;
+        elseif puck_bolts == 1
+            P_puck = P;       M_puck = M;
+        else
+            error('puck_bolts must be 1 or equal to n_bolts.');
+        end
+        Q_puck = Q;
+    case 'direct'
+        % Loads are given directly on one puck; no bracket and no friction credit.
+        if puck_bolts > 2, error('puck_bolts must be 1 or 2.'); end
+        F = NaN;  max_friction = 0;
+        P_puck = SF*direct_P_lb;  Q_puck = SF*direct_Q_lb;  M_puck = SF*direct_M_lbin;
+        if P_puck <= 0, error('Direct mode needs direct_P_lb > 0.'); end
+        P = P_puck/puck_bolts;  Q = Q_puck;  M = M_puck;     % per-bolt P is used by the spool neck check
     otherwise
-        error('bracket_type must be ''A'' or ''B''');
+        error('load_mode must be ''bracket'' or ''direct''');
 end
-
-max_friction = n_bolts*bolt_preload*mu*use_friction;
-P = SF*P_ins;                                % design normal load per insert (lb)
-Q = max(SF*Fs - max_friction, 0);            % design shear (lb), old calc convention
-M = SF*M_ins;                                % design moment (lb-in)
-
-% Loads on the PUCK. If both bolts share it, the puck carries the bracket resultants (the bolt
-% couple of a type A bracket is internal to the rigid puck). If each bolt has its own puck, each
-% puck carries the per-insert loads above, as in the G7 calculator.
-if puck_bolts == n_bolts
-    P_puck = SF*Fn;   M_puck = SF*Fs*y;
-elseif puck_bolts == 1
-    P_puck = P;       M_puck = M;
-else
-    error('puck_bolts must be 1 or equal to n_bolts.');
-end
-Q_puck = Q;
 
 %% 7. ECSS CORE-SHEAR CHECK  (same equations as old calc)
 beta   = c/f;                                                 % [C.2-9]
@@ -235,8 +254,12 @@ m_resin    = mat.rho_gcc*in3_to_cc/1000*V_resin;                     % kg
 m_puck     = m_spool + m_resin;                                      % kg
 
 fprintf('\n=== DESIGN LOADS (SF = %.2f) ===\n', SF);
-fprintf('Link force %.0f N (%.0f lb), %.2f deg from normal, bracket type %s\n', ...
-        link_force_N, F, angle_from_normal_deg, upper(bracket_type));
+if strcmpi(load_mode, 'bracket')
+    fprintf('Link force %.0f N (%.0f lb), %.2f deg from normal, bracket type %s\n', ...
+            link_force_N, F, angle_from_normal_deg, upper(bracket_type));
+else
+    fprintf('Direct load mode (no bracket, no friction credit)\n');
+end
 fprintf('Per insert: P = %.0f lb   Q = %.0f lb   M = %.0f lb-in   (friction credit %.0f lb)\n', P, Q, M, max_friction);
 fprintf('On the puck (%d bolt(s)): P = %.0f lb   Q = %.0f lb   M = %.0f lb-in\n', puck_bolts, P_puck, Q_puck, M_puck);
 fprintf('Panel: f = %.4f in (%d plies x %.3f mm), c = %.3f in\n', f, n_plies, t_ply_mm, c);
@@ -295,7 +318,7 @@ end
 if puck_bolts == 2
     fprintf('  NOTE: two-bolt puck sizing is an equal-perimeter approximation (ours, not ECSS).\n');
 end
-if Q_puck == 0 && use_friction
+if Q_puck == 0 && use_friction && strcmpi(load_mode, 'bracket')
     fprintf('  NOTE: friction cancels all of Q (bolt preload and mu are placeholders).\n');
 end
 
