@@ -1,0 +1,23 @@
+# MR27 hardpoint table for the batch run in G7_Insert_Calculator_MR27.m
+# Link forces = max |force| per link from MR27_Suspension_Loads_Rev15.xlsx (rows 20-21, max tension / max compression).
+# GEOMETRY IS A PLACEHOLDER: only FLCA fore (geom_verified=1) has bracket geometry from the MR26 sheet
+# (angle 10.45 deg, y 0.4185 in, a 1.52 in, type B). Every other row reuses those values and is NOT verified
+# (geom_verified=0), and whether each link really has a 2-insert bracket is also unverified. Replace per hardpoint.
+# qty = number of identical brackets on the car (front links x2 corners, rear links x2 corners).
+# load_mode = bracket (link force + FBD) or direct (direct_P/Q/M per insert, lb / lb-in, before SF).
+# panel_core / puck_core must match names in core_lib (panel core ASSUMED 3.1 pcf everywhere for now).
+name,link_force_N,angle_deg,bracket_type,a,y,inserts_per_bracket,inserts_per_puck,panel_core,puck_core,insert_type,qty,load_mode,direct_P,direct_Q,direct_M,use_friction,geom_verified
+FUCA_fore_front,1520,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+FUCA_aft_front,1510,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+FLCA_fore_front,8140,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,1
+FLCA_aft_front,7330,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+Pushrod_front,2030,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+TieRod_front,2330,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+FUCA_fore_rear,1860,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+FUCA_aft_rear,1170,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+FLCA_fore_rear,3520,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+FLCA_aft_rear,4020,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+Pushrod_rear,2530,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+ToeLink_rear,406,10.45,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,2,bracket,0,0,0,1,0
+# Example of a direct-load (non-suspension) row. qty=0 so it is shown but NOT counted in car totals. Loads are made up.
+EXAMPLE_aero_direct,0,0,B,1.52,0.4185,2,2,1/8-3.1,1/8-6.1,potted,0,direct,300,200,0,0,0
