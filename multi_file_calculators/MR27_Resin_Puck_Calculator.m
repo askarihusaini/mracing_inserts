@@ -25,9 +25,9 @@
 clear; close all; clc;
 
 %% 0. RUN OPTIONS
-make_plots      = true;     % set false for headless runs
-run_sensitivity = true;
-run_batch       = true;
+make_plots      = false;     % set false for headless runs
+run_sensitivity = false;
+run_batch       = false;
 hardpoint_csv   = 'hardpoints_MR27_resin_puck.csv';
 
 %% 1. LOADS
@@ -41,7 +41,7 @@ direct_M = 0;                    % lb-in
 % Default is the worst load case (FLCA fore, Cornering 3) from MR27 Suspension Loads Rev15.
 % Rev15 contains forces only: angle, a and y still come from the MR26 FLCA-F geometry and
 % were NOT re-checked (user believes the geometry changed; open question).
-link_force_N          = 8140;    % max link force (N), Rev15
+link_force_N          = 3520;    % max link force (N), Rev15
 angle_from_normal_deg = 10.45;   % deg from panel normal  UNVERIFIED for Rev15
 bracket_type          = 'B';     % 'A' or 'B'
 a                     = 1.52;    % distance between bolts (in)  UNVERIFIED for Rev15
@@ -54,7 +54,7 @@ inserts_per_bracket   = 2;       % spools (= bolts) per bracket
 %                equivalent circle (an approximation of ours, not ECSS, ignoring the two cusps).
 %   'shared'   = one big ROUND puck holds both spools (at +/- a/2); loads = bracket resultants
 %   'separate' = one puck per spool; neighbouring pucks must fit at the bolt spacing a
-puck_layout           = 'overlap';
+puck_layout           = 'separate';
 
 % Split of Q, M and friction between the spools of a bracket:
 %   'whole_bracket' = "method 1" of the MR26 sheet: per-insert P, but WHOLE-bracket Q, M and
@@ -65,8 +65,8 @@ load_convention = 'whole_bracket';
 % Friction credit. Default preload is a THEORETICAL 75%-of-proof value; the MR26 torque-spec value
 % for FLCA fore is 1156 lb with mu = 0.175. Both are UNVERIFIED assumptions. With these numbers
 % friction cancels all shear. Set use_friction = false for the conservative / aero baseline.
-use_friction      = true;
-bolt_preload      = 2125.8;      % lb per bolt
+use_friction      = false;
+bolt_preload      = 7033;      % lb per bolt
 mu                = 0.2;
 preload_retention = 1.0;         % 0.5 - 1.0
 

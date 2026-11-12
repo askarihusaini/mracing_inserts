@@ -51,7 +51,7 @@ n_bolts      = 2;                % bolts per bracket
 %   'figure8'  = both bolts in ONE puck made of two overlapping circles
 %   'stadium'  = both bolts in ONE puck shaped as a slot (no cusps)
 %   'separate' = one round puck per bolt (the pucks must fit at the bolt spacing a)
-puck_layout = 'figure8';
+puck_layout = 'separate';
 puck_bolts  = 2 - strcmpi(puck_layout, 'separate');   % bolts per puck (2, or 1 for separate pucks)
 
 %% 2. SANDWICH PANEL
@@ -70,7 +70,7 @@ tau_f_punch = 14000;             % skin through-thickness shear (punch) strength
 
 % Core (global 6.1 pcf, Hexcel HexWeb CR-III 5052 1/8-6.1, W direction)
 c         = 1;                   % core height (in)
-Gc        = 41000;               % core effective shear modulus (psi) = G_W. Old calc used G_W/3 = 13667; dropped.
+Gc        = 41000/3;               % core effective shear modulus (psi) = G_W.
 Twcrit    = 272;                 % core shear strength (psi), minimum value (old calc value)
 
 %% 3. RESIN PUCK MATERIAL  <-- EDIT
